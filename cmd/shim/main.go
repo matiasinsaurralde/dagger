@@ -268,10 +268,13 @@ func shim() int {
 		panic(err)
 	}
 
+	outNlbw := NewLineBreakWriter(
+		scrubOutWriter,
+	)
+	defer outNlbw.Close()
+
 	utfLineScrubOutWriter := NewUTF8DanglingWriter(
-		NewLineBreakWriter(
-			scrubOutWriter,
-		),
+		outNlbw,
 	)
 
 	cmd.Stdout = utfLineScrubOutWriter
@@ -288,10 +291,12 @@ func shim() int {
 		panic(err)
 	}
 
+	errNlbw := NewLineBreakWriter(
+		scrubErrWriter,
+	)
+	defer errNlbw.Close()
 	utfLineScrubErrWriter := NewUTF8DanglingWriter(
-		NewLineBreakWriter(
-			scrubErrWriter,
-		),
+		errNlbw,
 	)
 	cmd.Stderr = utfLineScrubErrWriter
 
