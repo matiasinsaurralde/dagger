@@ -448,7 +448,7 @@ func setupBundle() int {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Pdeathsig: syscall.SIGKILL,
+			// Pdeathsig: syscall.SIGKILL,
 		}
 
 		sigCh := make(chan os.Signal, 32)

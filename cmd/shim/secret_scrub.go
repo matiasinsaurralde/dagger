@@ -26,6 +26,7 @@ func (w *SecretScrubWriter) Write(b []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// TODO: passing writer and interacting directly with it might speed up stuff:
 	scrubbedBytes := scrubSecretBytes(w.secretLines, b)
 
 	_, err := w.w.Write(scrubbedBytes)
@@ -37,7 +38,15 @@ func (w *SecretScrubWriter) Write(b []byte) (int, error) {
 }
 
 func scrubSecretBytes(secretValues []string, b []byte) []byte {
+	// fmt.Printf("scrubSecretBytes call, secretValues: %+v, b: %+v, b as str: %+v\n", secretValues, b, string(b))
 	s := string(b)
+
+	// We probably scan the input string too many times:
+	// 1. strings.Split
+	// 2. TrimSpace
+	// 3. ReplaceAll?
+	// 4. Join
+
 	ss := strings.Split(s, "\n")
 
 	out := make([]string, 0, len(ss))
@@ -57,6 +66,41 @@ func scrubSecretBytes(secretValues []string, b []byte) []byte {
 	s = strings.Join(out, "\n")
 
 	return []byte(s)
+}
+
+func scrubSecretBytesNew(secretValues []string, b []byte) []byte {
+	// fmt.Printf("scrubSecretBytes call, secretValues: %+v, b: %+v, b as str: %+v\n", secretValues, b, string(b))
+	s := string(b)
+	ss := strings.Split(s, "\n")
+
+	// TODO: should we grow this string builder:
+	var out strings.Builder
+
+	// out := make([]string, 0, len(ss))
+
+	for _, line := range ss {
+		for _, secretLine := range secretValues {
+			secretLine := strings.TrimSpace(secretLine)
+			if secretLine == "" {
+				continue
+			}
+			/*
+				if !strings.Contains(line, secretLine) {
+					out.WriteString(line)
+					continue
+				}
+			*/
+			// FIXME: I think we can do better
+			line = strings.ReplaceAll(line, secretLine, "***")
+		}
+		// out = append(out, line)
+		out.WriteString(line)
+	}
+
+	// s = strings.Join(out, "\n")
+
+	// return []byte(s)
+	return []byte(out.String())
 }
 
 // NewSecretScrubWriter replaces known secrets by "***".

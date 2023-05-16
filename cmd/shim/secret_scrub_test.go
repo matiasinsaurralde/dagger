@@ -157,16 +157,70 @@ func TestScrubSecretWrite(t *testing.T) {
 	require.Equal(t, "Not secret\n***\n***\n***\n***\n***\n***\n***\n***\n***\n\n***\n", string(got))
 }
 
-// func TestScrubSecretMultiWrite(t *testing) {
-// 	secrets := []string{
-// 		"This is secret",
-// 	}
-//
-// 	var buf bytes.Buffer
-// 	w, err := NewSecretScrubWriter(&buf, currentDirPath, fsys, env, core.SecretToScrubInfo{
-// 		Envs:  []string{"MY_SECRET_ID"},
-// 		Files: []string{"/mysecret", "/subdir/alsosecret"},
-// 	})
-// 	require.NoError(t, err)
-//
-// }
+// TODO: test multiline vs single line, test mixed lines with secrets in some of them, etc.
+// cover missing scenarios from gocov
+// cover full inputs without secrets
+// performance should be good with mixed scenario (with/without secret)
+func TestScrubSecretMultiWrite(t *testing.T) {
+	//secrets := []string{
+	//"This is secret",
+	//}
+
+	// ???
+	fsys := fstest.MapFS{
+		"mnt/mysecret": &fstest.MapFile{
+			Data: []byte("my secret file"),
+		},
+		"mnt/subdir/alsosecret": &fstest.MapFile{
+			Data: []byte("a subdir secret file"),
+		},
+	}
+
+	env := []string{
+		"MY_SECRET_ID=my secret value",
+		"SECRET2=another secret value",
+	}
+
+	currentDirPath := "/"
+
+	var buf bytes.Buffer
+	// w, err := NewSecretScrubWriter(&buf, currentDirPath, fsys, env, core.SecretToScrubInfo{
+	w, err := NewSecretScrubWriter(&buf, currentDirPath, fsys, env, core.SecretToScrubInfo{
+		Envs: []string{"MY_SECRET_ID", "SECRET2"},
+		// Files: []string{"/mysecret", "/subdir/alsosecret"},
+	})
+	// require.NoError(t, err)
+	fmt.Printf("w: %+v, err: %+v\n", w, err)
+
+	_, err = fmt.Fprintf(w, "test123 my secret value abc123")
+	// fmt.Printf("n: %+v, err: %+v\n", n, err)
+
+	// fmt.Fprintf(w, "\nanother line my secret value 111")
+
+	// fmt.Fprintf(w, "\nno scrub: another secret value some other string\n")
+
+	out := buf.String()
+	fmt.Printf("out: %+v\n", out)
+
+	// want := "I love to share my secret value to my close ones. But I keep my secret file to myself."
+	// require.Equal(t, want, buf.String())
+
+}
+
+func BenchmarkScrubSecretMultiWrite(b *testing.B) {
+	secrets := []string{"secret value"}
+	input := []byte("t111 secret value t222")
+	for i := 0; i < b.N; i++ {
+		scrubSecretBytes(secrets, input)
+	}
+
+}
+
+func BenchmarkScrubSecretMultiWriteNew(b *testing.B) {
+	secrets := []string{"secret value"}
+	input := []byte("t111 secret value t222\nline without secret\nline with secret value")
+	for i := 0; i < b.N; i++ {
+		scrubSecretBytesNew(secrets, input)
+	}
+
+}
