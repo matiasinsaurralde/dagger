@@ -21,6 +21,7 @@ import (
 	io "io"
 	math "math"
 	math_bits "math/bits"
+	"sync"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -2939,7 +2940,7 @@ func (c *lLBBridgeClient) ExecProcess(ctx context.Context, opts ...grpc.CallOpti
 	if err != nil {
 		return nil, err
 	}
-	x := &lLBBridgeExecProcessClient{stream}
+	x := &lLBBridgeExecProcessClient{ClientStream: stream, mu: &sync.Mutex{}}
 	return x, nil
 }
 
@@ -2951,9 +2952,12 @@ type LLBBridge_ExecProcessClient interface {
 
 type lLBBridgeExecProcessClient struct {
 	grpc.ClientStream
+	mu *sync.Mutex
 }
 
 func (x *lLBBridgeExecProcessClient) Send(m *ExecMessage) error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -3246,7 +3250,7 @@ func _LLBBridge_ReleaseContainer_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _LLBBridge_ExecProcess_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(LLBBridgeServer).ExecProcess(&lLBBridgeExecProcessServer{stream})
+	return srv.(LLBBridgeServer).ExecProcess(&lLBBridgeExecProcessServer{ServerStream: stream, mu: &sync.Mutex{}})
 }
 
 type LLBBridge_ExecProcessServer interface {
@@ -3257,9 +3261,12 @@ type LLBBridge_ExecProcessServer interface {
 
 type lLBBridgeExecProcessServer struct {
 	grpc.ServerStream
+	mu *sync.Mutex
 }
 
 func (x *lLBBridgeExecProcessServer) Send(m *ExecMessage) error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
 	return x.ServerStream.SendMsg(m)
 }
 
