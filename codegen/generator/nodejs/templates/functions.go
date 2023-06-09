@@ -72,6 +72,7 @@ func commentToLines(s string) []string {
 // Example: `Replaced by @foo.` -> `// Replaced by Foo\n`
 func formatDeprecation(s string) []string {
 	r := regexp.MustCompile("`[a-zA-Z0-9_]+`")
+
 	matches := r.FindAllString(s, -1)
 	for _, match := range matches {
 		replacement := strings.TrimPrefix(match, "`")
