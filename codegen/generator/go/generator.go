@@ -35,7 +35,6 @@ var (
 
 type GoGenerator struct {
 	generator.BaseGenerator
-	templates.FormatTypeFunc
 
 	headerTpl *template.Template
 	scalarTpl *template.Template
@@ -44,8 +43,7 @@ type GoGenerator struct {
 	enumTpl   *template.Template
 }
 
-func (g *GoGenerator) loadTemplates() error {
-	var err error
+func (g *GoGenerator) LoadTemplates() (*template.Template, error) {
 	funcMap := generator.FuncMap(g, g.CommonFunc, template.FuncMap{
 		"FieldOptionsStructName":  g.fieldOptionsStructName,
 		"FieldFunction":           g.fieldFunction,
@@ -57,31 +55,32 @@ func (g *GoGenerator) loadTemplates() error {
 		"FormatArrayToSingleType": g.formatArrayToSingleType,
 	})
 
+	var err error
 	g.headerTpl, err = template.New("header").Funcs(funcMap).Parse(headerSource)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	g.scalarTpl, err = template.New("scalar").Funcs(funcMap).Parse(scalarSource)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	g.inputTpl, err = template.New("input").Funcs(funcMap).Parse(inputSource)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	g.objectTpl, err = template.New("object").Funcs(funcMap).Parse(objectSource)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	g.enumTpl, err = template.New("enum").Funcs(funcMap).Parse(enumSource)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return nil, nil
 }
 
 // FormatName formats a GraphQL name (e.g. object, field, arg) into a Go equivalent
@@ -358,7 +357,7 @@ func (g *GoGenerator) Generate(_ context.Context, schema *introspection.Schema) 
 
 	g.CommonFunc = generator.NewCommonFunctions(&templates.FormatTypeFunc{})
 
-	if err := g.loadTemplates(); err != nil {
+	if _, err := g.LoadTemplates(); err != nil {
 		return nil, err
 	}
 

@@ -37,6 +37,7 @@ type Config struct {
 type Generator interface {
 	Generate(ctx context.Context, schema *introspection.Schema) ([]byte, error)
 	SetConfig(cfg *Config)
+	LoadTemplates() (*template.Template, error)
 
 	FormatName(string) string
 	FormatEnum(string) string
