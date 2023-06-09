@@ -149,12 +149,9 @@ func generate(ctx context.Context, schema *introspection.Schema, cfg generator.C
 	var gen generator.Generator
 	switch cfg.Lang {
 	case generator.SDKLangGo:
-		gen = &gogenerator.GoGenerator{
-			Config: cfg,
-		}
+		gen = &gogenerator.GoGenerator{}
 	case generator.SDKLangNodeJS:
 		gen = &nodegenerator.NodeGenerator{}
-
 	default:
 		sdks := []string{
 			string(generator.SDKLangGo),
@@ -162,6 +159,7 @@ func generate(ctx context.Context, schema *introspection.Schema, cfg generator.C
 		}
 		return []byte{}, fmt.Errorf("use target SDK language: %s: %w", sdks, generator.ErrUnknownSDKLang)
 	}
+	gen.SetConfig(&cfg)
 
 	return gen.Generate(ctx, schema)
 }
