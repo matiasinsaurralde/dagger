@@ -47,6 +47,9 @@ type Generator interface {
 	Comment(string) string
 }
 
+// BaseGenerator provides default implementations for common methods
+// It also holds the generator configuration data structure
+// CommonFunc is kept for compatibility with previous codebase:
 type BaseGenerator struct {
 	Config     *Config
 	CommonFunc *CommonFunctions
@@ -60,7 +63,10 @@ func (b *BaseGenerator) Generate(ctx context.Context, schema *introspection.Sche
 	return nil, errors.New("not implemented")
 }
 
-func FuncMap(g Generator, commonFunc *CommonFunctions, specificFunc template.FuncMap) template.FuncMap {
+// FuncMap returns a template.FuncMap that merges both common and generator-specific functions
+// The Generator object that's passed will typically consist of a generator data structure
+// that also embeds BaseGenerator. BaseGenerator provides a default implementation for most common methods
+func FuncMap(g Generator, commonFunc *CommonFunctions, generatorFunc template.FuncMap) template.FuncMap {
 	funcMap := template.FuncMap{
 		"FormatName":        g.FormatName,
 		"FormatEnum":        g.FormatEnum,
@@ -73,7 +79,9 @@ func FuncMap(g Generator, commonFunc *CommonFunctions, specificFunc template.Fun
 		"FormatOutputType":  commonFunc.FormatOutputType,
 		"ConvertID":         commonFunc.ConvertID,
 	}
-	for k, v := range specificFunc {
+
+	// Append generator-specific functions:
+	for k, v := range generatorFunc {
 		funcMap[k] = v
 	}
 	return funcMap
