@@ -46,17 +46,18 @@ var configOverride = `
 {
 	"hooks" : {
 	   "prestart" : [
-		  {
-			 "args" : [
-				"nvidia-container-runtime-hook",
-				"prestart"
-			 ],
-			 "env" : [
-				"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-				"PWD=/"
-			 ],
-			 "path" : "/usr/bin/nvidia-container-runtime-hook"
-		  }
+		{
+			"args" : [
+			   "nvidia-container-runtime-hook",
+			   "prestart"
+			],
+			"env" : [
+			   "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			   "LD_LIBRARY_PATH=/usr/lib:/usr/lib/x86_64-linux-gnu:/lib",
+			   "PWD=/"
+			],
+			"path" : "/usr/bin/nvidia-container-runtime-hook"
+		 }
 	   ]
 	},
 	"hostname" : "runc",
@@ -218,6 +219,7 @@ var configOverride = `
 	   "cwd" : "/",
 	   "env" : [
 		  "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		  "LD_LIBRARY_PATH=/usr/lib:/usr/lib/x86_64-linux-gnu:/lib",
 		  "NVIDIA_VISIBLE_DEVICES=all"
 	   ],
 	   "noNewPrivileges" : true,
