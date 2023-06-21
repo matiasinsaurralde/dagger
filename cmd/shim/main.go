@@ -42,6 +42,204 @@ var (
 	pipeWg     sync.WaitGroup
 )
 
+var configOverride = `
+{
+	"hooks" : {
+	   "prestart" : [
+		  {
+			 "args" : [
+				"nvidia-container-runtime-hook",
+				"prestart"
+			 ],
+			 "env" : [
+				"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				"PWD=/"
+			 ],
+			 "path" : "/usr/bin/nvidia-container-runtime-hook"
+		  }
+	   ]
+	},
+	"hostname" : "runc",
+	"linux" : {
+	   "gidMappings" : [
+		  {
+			 "containerID" : 0,
+			 "hostID" : 1000,
+			 "size" : 1
+		  }
+	   ],
+	   "maskedPaths" : [
+		  "/proc/acpi",
+		  "/proc/asound",
+		  "/proc/kcore",
+		  "/proc/keys",
+		  "/proc/latency_stats",
+		  "/proc/timer_list",
+		  "/proc/timer_stats",
+		  "/proc/sched_debug",
+		  "/sys/firmware",
+		  "/proc/scsi"
+	   ],
+	   "namespaces" : [
+		  {
+			 "type" : "pid"
+		  },
+		  {
+			 "type" : "ipc"
+		  },
+		  {
+			 "type" : "uts"
+		  },
+		  {
+			 "type" : "mount"
+		  },
+		  {
+			 "type" : "user"
+		  }
+	   ],
+	   "readonlyPaths" : [
+		  "/proc/bus",
+		  "/proc/fs",
+		  "/proc/irq",
+		  "/proc/sys",
+		  "/proc/sysrq-trigger"
+	   ],
+	   "uidMappings" : [
+		  {
+			 "containerID" : 0,
+			 "hostID" : 1000,
+			 "size" : 1
+		  }
+	   ]
+	},
+	"mounts" : [
+	   {
+		  "destination" : "/proc",
+		  "source" : "proc",
+		  "type" : "proc"
+	   },
+	   {
+		  "destination" : "/dev",
+		  "options" : [
+			 "nosuid",
+			 "strictatime",
+			 "mode=755",
+			 "size=65536k"
+		  ],
+		  "source" : "tmpfs",
+		  "type" : "tmpfs"
+	   },
+	   {
+		  "destination" : "/dev/pts",
+		  "options" : [
+			 "nosuid",
+			 "noexec",
+			 "newinstance",
+			 "ptmxmode=0666",
+			 "mode=0620"
+		  ],
+		  "source" : "devpts",
+		  "type" : "devpts"
+	   },
+	   {
+		  "destination" : "/dev/shm",
+		  "options" : [
+			 "nosuid",
+			 "noexec",
+			 "nodev",
+			 "mode=1777",
+			 "size=65536k"
+		  ],
+		  "source" : "shm",
+		  "type" : "tmpfs"
+	   },
+	   {
+		  "destination" : "/dev/mqueue",
+		  "options" : [
+			 "nosuid",
+			 "noexec",
+			 "nodev"
+		  ],
+		  "source" : "mqueue",
+		  "type" : "mqueue"
+	   },
+	   {
+		  "destination" : "/sys",
+		  "options" : [
+			 "rbind",
+			 "nosuid",
+			 "noexec",
+			 "nodev",
+			 "ro"
+		  ],
+		  "source" : "/sys",
+		  "type" : "none"
+	   },
+	   {
+		  "destination" : "/sys/fs/cgroup",
+		  "options" : [
+			 "nosuid",
+			 "noexec",
+			 "nodev",
+			 "relatime",
+			 "ro"
+		  ],
+		  "source" : "cgroup",
+		  "type" : "cgroup"
+	   }
+	],
+	"ociVersion" : "1.0.2-dev",
+	"process" : {
+	   "args" : [
+		  "nvidia-smi"
+	   ],
+	   "capabilities" : {
+		  "ambient" : [
+			 "CAP_AUDIT_WRITE",
+			 "CAP_KILL",
+			 "CAP_NET_BIND_SERVICE"
+		  ],
+		  "bounding" : [
+			 "CAP_AUDIT_WRITE",
+			 "CAP_KILL",
+			 "CAP_NET_BIND_SERVICE"
+		  ],
+		  "effective" : [
+			 "CAP_AUDIT_WRITE",
+			 "CAP_KILL",
+			 "CAP_NET_BIND_SERVICE"
+		  ],
+		  "permitted" : [
+			 "CAP_AUDIT_WRITE",
+			 "CAP_KILL",
+			 "CAP_NET_BIND_SERVICE"
+		  ]
+	   },
+	   "cwd" : "/",
+	   "env" : [
+		  "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		  "NVIDIA_VISIBLE_DEVICES=all"
+	   ],
+	   "noNewPrivileges" : true,
+	   "rlimits" : [
+		  {
+			 "hard" : 1024,
+			 "soft" : 1024,
+			 "type" : "RLIMIT_NOFILE"
+		  }
+	   ],
+	   "user" : {
+		  "gid" : 0,
+		  "uid" : 0
+	   }
+	},
+	"root" : {
+	   "path" : "rootfs_goes_here",
+	   "readonly": true
+	}
+ }
+`
+
 /*
 There are two "subcommands" of this binary:
  1. The setupBundle command, which is invoked by buildkitd as the oci executor. It updates the
@@ -455,7 +653,11 @@ func setupBundle() int {
 		fmt.Printf("Error marshaling config.json: %v\n", err)
 		return 1
 	}
-	if err := os.WriteFile(configPath, configBytes, 0o600); err != nil {
+
+	// Take the root path from the original spec. Replace config.json with configOverride:
+	configOverride = strings.Replace(configOverride, "rootfs_goes_here", spec.Root.Path, 1)
+	if err := os.WriteFile(configPath, []byte(configOverride), 0o600); err != nil {
+		// if err := os.WriteFile(configPath, configBytes, 0o600); err != nil {
 		fmt.Printf("Error writing config.json: %v\n", err)
 		return 1
 	}
