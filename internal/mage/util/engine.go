@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"text/template"
 
 	"dagger.io/dagger"
@@ -193,7 +196,7 @@ func devEngineContainer(c *dagger.Client, arch string, opts ...DevEngineOpts) *d
 	if err != nil {
 		panic(err)
 	}
-	return c.Container(dagger.ContainerOpts{Platform: dagger.Platform("linux/" + arch)}).
+	container := c.Container(dagger.ContainerOpts{Platform: dagger.Platform("linux/" + arch)}).
 		From("alpine:"+alpineVersion).
 		WithExec([]string{
 			"apk", "add",
@@ -220,6 +223,10 @@ func devEngineContainer(c *dagger.Client, arch string, opts ...DevEngineOpts) *d
 			Permissions: 0o755,
 		}).
 		WithEntrypoint([]string{"dagger-entrypoint.sh"})
+
+	// Inject Nvidia deps:
+	container = nvidiaDeps(c, container)
+	return container
 }
 
 func devEngineContainers(c *dagger.Client, arches []string, opts ...DevEngineOpts) []*dagger.Container {
@@ -252,6 +259,49 @@ func cniPlugins(c *dagger.Client, arch string) *dagger.Directory {
 		}).
 		WithFile("/opt/cni/bin/dnsname", dnsnameBinary(c, arch)).
 		Directory("/opt/cni/bin")
+}
+
+func nvidiaDeps(client *dagger.Client, container *dagger.Container) *dagger.Container {
+	// Filter out binary and lib deps in the host:
+	libDir, _ := os.ReadDir("/usr/lib/x86_64-linux-gnu")
+	libs := []string{}
+	binaries := []string{}
+	for _, entry := range libDir {
+		name := entry.Name()
+		if strings.HasPrefix(name, "libnv") ||
+			strings.HasPrefix(name, "libcap") ||
+			strings.HasPrefix(name, "libcuda") {
+			path := filepath.Join("/usr/lib/x86_64-linux-gnu", name)
+			libs = append(libs, path)
+		}
+	}
+	binDir, _ := os.ReadDir("/usr/bin")
+	for _, entry := range binDir {
+		name := entry.Name()
+		if strings.HasPrefix(name, "nvidia") {
+			path := filepath.Join("/usr/bin", name)
+			binaries = append(binaries, path)
+		}
+	}
+
+	// Copy the files:
+	for _, lib := range libs {
+		container = container.WithFile(lib,
+			client.Host().File(lib),
+			dagger.ContainerWithFileOpts{
+				Permissions: 0o755,
+			},
+		)
+	}
+	for _, bin := range binaries {
+		container = container.WithFile(bin,
+			client.Host().File(bin),
+			dagger.ContainerWithFileOpts{
+				Permissions: 0o755,
+			},
+		)
+	}
+	return container
 }
 
 func dnsnameBinary(c *dagger.Client, arch string) *dagger.File {
