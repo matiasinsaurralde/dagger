@@ -45,6 +45,8 @@ type Generator interface {
 	IsEnum(*introspection.Type) bool
 	FormatDeprecation(string) string
 	Comment(string) string
+	FormatReturnType(introspection.Field) string
+	FormatKindList(string) string
 }
 
 // BaseGenerator provides default implementations for common methods
@@ -87,6 +89,43 @@ func FuncMap(g Generator, commonFunc *CommonFunctions, generatorFunc template.Fu
 	return funcMap
 }
 
+// formatType loops through the type reference to transform it into its SDK language.
+func formatType(g Generator, r *introspection.TypeRef, input bool) (representation string) {
+	for ref := r; ref != nil; ref = ref.OfType {
+		switch ref.Kind {
+		case introspection.TypeKindList:
+			// Handle this special case with defer to format array at the end of
+			// the loop.
+			// Since an SDK needs to insert it at the end, other at the beginning.
+			defer func() {
+				// representation = c.formatTypeFuncs.FormatKindList(representation)
+				representation = g.FormatKindList(representation)
+			}()
+		case introspection.TypeKindScalar:
+			switch introspection.Scalar(ref.Name) {
+			case introspection.ScalarString:
+				// return c.formatTypeFuncs.FormatKindScalarString(representation)
+			case introspection.ScalarInt:
+				// return c.formatTypeFuncs.FormatKindScalarInt(representation)
+			case introspection.ScalarFloat:
+				// return c.formatTypeFuncs.FormatKindScalarFloat(representation)
+			case introspection.ScalarBoolean:
+				// return c.formatTypeFuncs.FormatKindScalarBoolean(representation)
+			default:
+				// return c.formatTypeFuncs.FormatKindScalarDefault(representation, ref.Name, input)
+			}
+		case introspection.TypeKindObject:
+			// return c.formatTypeFuncs.FormatKindObject(representation, ref.Name)
+		case introspection.TypeKindInputObject:
+			// return c.formatTypeFuncs.FormatKindInputObject(representation, ref.Name)
+		case introspection.TypeKindEnum:
+			// return c.formatTypeFuncs.FormatKindEnum(representation, ref.Name)
+		}
+	}
+
+	panic(r)
+}
+
 // FormatEnum formats a GraphQL Enum value into a Go equivalent
 // Example: `fooId` -> `FooID`
 func (b *BaseGenerator) FormatEnum(s string) string {
@@ -122,6 +161,10 @@ func (b *BaseGenerator) Comment(s string) string {
 }
 
 func (b *BaseGenerator) FormatName(s string) string {
+	return ""
+}
+
+func (b *BaseGenerator) FormatReturnType(f introspection.Field) string {
 	return ""
 }
 

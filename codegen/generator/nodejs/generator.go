@@ -39,6 +39,11 @@ func (g *NodeGenerator) FormatKindObject(representation string, refName string) 
 	return representation
 }
 
+func (g *NodeGenerator) FormatKindList(representation string) string {
+	representation += "[]"
+	return representation
+}
+
 func (g *NodeGenerator) FormatKindInputObject(representation string, refName string) string {
 	representation += g.formatName(refName)
 	return representation

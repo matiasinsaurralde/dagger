@@ -10,7 +10,6 @@ import (
 	"unicode"
 
 	"github.com/dagger/dagger/codegen/generator"
-	"github.com/dagger/dagger/codegen/generator/go/templates"
 	"github.com/dagger/dagger/codegen/introspection"
 
 	_ "embed"
@@ -53,6 +52,8 @@ func (g *GoGenerator) LoadTemplates() (*template.Template, error) {
 		"ToUpperCase":             g.toUpperCase,
 		"FormatArrayField":        g.formatArrayField,
 		"FormatArrayToSingleType": g.formatArrayToSingleType,
+		"FormatDeprecation":       g.FormatDeprecation,
+		"comment":                 g.Comment,
 	})
 
 	var err error
@@ -221,6 +222,13 @@ func (g *GoGenerator) FormatDeprecation(s string) string {
 	return g.Comment("Deprecated: " + s)
 }
 
+func (g *GoGenerator) FormatKindList(representation string) string {
+	representation = "[]" + representation
+	return representation
+}
+
+// Comment comments out a string
+// Example: `hello\nworld` -> `// hello\n// world\n`
 func (g *GoGenerator) Comment(s string) string {
 	if s == "" {
 		return ""
@@ -355,7 +363,7 @@ func (g *GoGenerator) formatArrayField(fields []*introspection.Field) string {
 func (g *GoGenerator) Generate(_ context.Context, schema *introspection.Schema) ([]byte, error) {
 	generator.SetSchema(schema)
 
-	g.CommonFunc = generator.NewCommonFunctions(&templates.FormatTypeFunc{})
+	// g.CommonFunc = generator.NewCommonFunctions(&templates.FormatTypeFunc{})
 
 	if _, err := g.LoadTemplates(); err != nil {
 		return nil, err
