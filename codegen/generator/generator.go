@@ -25,6 +25,9 @@ const (
 	SDKLangGo     SDKLang = "go"
 	SDKLangNodeJS SDKLang = "nodejs"
 	SDKLangPython SDKLang = "python"
+
+	QueryStructName       = "Query"
+	QueryStructClientName = "Client"
 )
 
 type Config struct {
@@ -32,6 +35,20 @@ type Config struct {
 	// Package is the target package that is generated.
 	// Not used for the SDKLangNodeJS.
 	Package string
+}
+
+// CustomScalar registers custom Dagger type.
+// TODO: This may done it dynamically later instead of a static
+// map.
+var CustomScalar = map[string]string{
+	"ContainerID":      "Container",
+	"FileID":           "File",
+	"DirectoryID":      "Directory",
+	"SecretID":         "Secret",
+	"SocketID":         "Socket",
+	"CacheID":          "CacheVolume",
+	"ProjectID":        "Project",
+	"ProjectCommandID": "ProjectCommand",
 }
 
 type Generator interface {
@@ -45,16 +62,29 @@ type Generator interface {
 	IsEnum(*introspection.Type) bool
 	FormatDeprecation(string) string
 	Comment(string) string
-	FormatReturnType(introspection.Field) string
+
+	// Taken from common func:
 	FormatKindList(string) string
+	FormatKindScalarString(string) string
+	FormatKindScalarInt(string) string
+	FormatKindScalarFloat(string) string
+	FormatKindScalarBoolean(string) string
+	FormatKindScalarDefault(string, string, bool) string
+	FormatKindObject(string, string) string
+	FormatKindInputObject(string, string) string
+	FormatKindEnum(string, string) string
+
+	FormatReturnType(introspection.Field) string
+	FormatInputType(*introspection.TypeRef) string
+	FormatOutputType(*introspection.TypeRef) string
+
+	ConvertID(introspection.Field) bool
 }
 
 // BaseGenerator provides default implementations for common methods
 // It also holds the generator configuration data structure
-// CommonFunc is kept for compatibility with previous codebase:
 type BaseGenerator struct {
-	Config     *Config
-	CommonFunc *CommonFunctions
+	Config *Config
 }
 
 func (b *BaseGenerator) SetConfig(cfg *Config) {
@@ -68,7 +98,7 @@ func (b *BaseGenerator) Generate(ctx context.Context, schema *introspection.Sche
 // FuncMap returns a template.FuncMap that merges both common and generator-specific functions
 // The Generator object that's passed will typically consist of a generator data structure
 // that also embeds BaseGenerator. BaseGenerator provides a default implementation for most common methods
-func FuncMap(g Generator, commonFunc *CommonFunctions, generatorFunc template.FuncMap) template.FuncMap {
+func FuncMap(g Generator, generatorFunc template.FuncMap) template.FuncMap {
 	funcMap := template.FuncMap{
 		"FormatName":        g.FormatName,
 		"FormatEnum":        g.FormatEnum,
@@ -76,10 +106,10 @@ func FuncMap(g Generator, commonFunc *CommonFunctions, generatorFunc template.Fu
 		"SortEnumFields":    g.SortEnumFields,
 		"IsEnum":            g.IsEnum,
 		"Comment":           g.Comment,
-		"FormatReturnType":  commonFunc.FormatReturnType,
-		"FormatInputType":   commonFunc.FormatInputType,
-		"FormatOutputType":  commonFunc.FormatOutputType,
-		"ConvertID":         commonFunc.ConvertID,
+		"FormatReturnType":  g.FormatReturnType,
+		"FormatInputType":   g.FormatInputType,
+		"FormatOutputType":  g.FormatOutputType,
+		"ConvertID":         g.ConvertID,
 	}
 
 	// Append generator-specific functions:
@@ -89,8 +119,8 @@ func FuncMap(g Generator, commonFunc *CommonFunctions, generatorFunc template.Fu
 	return funcMap
 }
 
-// formatType loops through the type reference to transform it into its SDK language.
-func formatType(g Generator, r *introspection.TypeRef, input bool) (representation string) {
+// FormatType loops through the type reference to transform it into its SDK language.
+func FormatType(g Generator, r *introspection.TypeRef, input bool) (representation string) {
 	for ref := r; ref != nil; ref = ref.OfType {
 		switch ref.Kind {
 		case introspection.TypeKindList:
@@ -98,28 +128,27 @@ func formatType(g Generator, r *introspection.TypeRef, input bool) (representati
 			// the loop.
 			// Since an SDK needs to insert it at the end, other at the beginning.
 			defer func() {
-				// representation = c.formatTypeFuncs.FormatKindList(representation)
 				representation = g.FormatKindList(representation)
 			}()
 		case introspection.TypeKindScalar:
 			switch introspection.Scalar(ref.Name) {
 			case introspection.ScalarString:
-				// return c.formatTypeFuncs.FormatKindScalarString(representation)
+				return g.FormatKindScalarString(representation)
 			case introspection.ScalarInt:
-				// return c.formatTypeFuncs.FormatKindScalarInt(representation)
+				return g.FormatKindScalarInt(representation)
 			case introspection.ScalarFloat:
-				// return c.formatTypeFuncs.FormatKindScalarFloat(representation)
+				return g.FormatKindScalarFloat(representation)
 			case introspection.ScalarBoolean:
-				// return c.formatTypeFuncs.FormatKindScalarBoolean(representation)
+				return g.FormatKindScalarBoolean(representation)
 			default:
-				// return c.formatTypeFuncs.FormatKindScalarDefault(representation, ref.Name, input)
+				return g.FormatKindScalarDefault(representation, ref.Name, input)
 			}
 		case introspection.TypeKindObject:
-			// return c.formatTypeFuncs.FormatKindObject(representation, ref.Name)
+			return g.FormatKindObject(representation, ref.Name)
 		case introspection.TypeKindInputObject:
-			// return c.formatTypeFuncs.FormatKindInputObject(representation, ref.Name)
+			return g.FormatKindInputObject(representation, ref.Name)
 		case introspection.TypeKindEnum:
-			// return c.formatTypeFuncs.FormatKindEnum(representation, ref.Name)
+			return g.FormatKindEnum(representation, ref.Name)
 		}
 	}
 
@@ -166,6 +195,36 @@ func (b *BaseGenerator) FormatName(s string) string {
 
 func (b *BaseGenerator) FormatReturnType(f introspection.Field) string {
 	return ""
+}
+
+// ConvertID returns true if the field returns an ID that should be
+// converted into an object.
+func (b *BaseGenerator) ConvertID(f introspection.Field) bool {
+	if f.Name == "id" {
+		return false
+	}
+	ref := f.TypeRef
+	if ref.Kind == introspection.TypeKindNonNull {
+		ref = ref.OfType
+	}
+	if ref.Kind != introspection.TypeKindScalar {
+		return false
+	}
+
+	// FIXME: As of now all custom scalars are IDs. If that changes we
+	// need to make sure we can tell the difference.
+	alias, ok := CustomScalar[ref.Name]
+
+	// FIXME: We don't have a simple way to convert any ID to its
+	// corresponding object (in codegen) so for now just return the
+	// current instance. Currently, `sync` is the only field where
+	// the error is what we care about but more could be added later.
+	// To avoid wasting a result, we return the ID which is a leaf value
+	// and triggers execution, but then convert to object in the SDK to
+	// allow continued chaining. For this, we're assuming the returned
+	// ID represents the exact same object but if that changes, we'll
+	// need to adjust.
+	return ok && alias == f.ParentObject.Name
 }
 
 // SetSchemaParents sets all the parents for the fields.

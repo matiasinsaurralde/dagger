@@ -10,7 +10,6 @@ import (
 	"text/template"
 
 	"github.com/dagger/dagger/codegen/generator"
-	"github.com/dagger/dagger/codegen/generator/nodejs/templates"
 	"github.com/dagger/dagger/codegen/introspection"
 	"github.com/iancoleman/strcase"
 
@@ -29,6 +28,41 @@ func (g *NodeGenerator) formatName(s string) string {
 	return s
 }
 
+func (g *NodeGenerator) FormatKindList(representation string) string {
+	representation += "[]"
+	return representation
+}
+
+func (g *NodeGenerator) FormatKindScalarString(representation string) string {
+	representation += "string"
+	return representation
+}
+
+func (g *NodeGenerator) FormatKindScalarInt(representation string) string {
+	representation += "number"
+	return representation
+}
+
+func (g *NodeGenerator) FormatKindScalarFloat(representation string) string {
+	representation += "number"
+	return representation
+}
+
+func (g *NodeGenerator) FormatKindScalarBoolean(representation string) string {
+	representation += "boolean"
+	return representation
+}
+
+func (g *NodeGenerator) FormatKindScalarDefault(representation string, refName string, input bool) string {
+	if alias, ok := generator.CustomScalar[refName]; ok && input {
+		representation += alias
+	} else {
+		representation += refName
+	}
+
+	return representation
+}
+
 func (g *NodeGenerator) FormatKindObject(representation string, refName string) string {
 	name := refName
 	if name == generator.QueryStructName {
@@ -36,11 +70,6 @@ func (g *NodeGenerator) FormatKindObject(representation string, refName string) 
 	}
 
 	representation += g.formatName(name)
-	return representation
-}
-
-func (g *NodeGenerator) FormatKindList(representation string) string {
-	representation += "[]"
 	return representation
 }
 
@@ -145,6 +174,27 @@ func (g *NodeGenerator) formatDeprecation(s string) []string {
 	return g.commentToLines("@deprecated " + s)
 }
 
+// FormatReturnType formats a GraphQL type into the SDK language output,
+// unless it's an ID that will be converted which needs to be formatted
+// as an input (for chaining).
+func (g *NodeGenerator) FormatReturnType(f introspection.Field) string {
+	return generator.FormatType(g, f.TypeRef, g.ConvertID(f))
+}
+
+// FormatInputType formats a GraphQL type into the SDK language input
+//
+// Example: `String` -> `string`
+func (g *NodeGenerator) FormatInputType(r *introspection.TypeRef) string {
+	return generator.FormatType(g, r, true)
+}
+
+// FormatOutputType formats a GraphQL type into the SDK language output
+//
+// Example: `String` -> `string`
+func (g *NodeGenerator) FormatOutputType(r *introspection.TypeRef) string {
+	return generator.FormatType(g, r, false)
+}
+
 func (g *NodeGenerator) LoadTemplates() (*template.Template, error) {
 	topLevelTemplate := "api"
 	templateDeps := []string{
@@ -156,7 +206,7 @@ func (g *NodeGenerator) LoadTemplates() (*template.Template, error) {
 		fileNames = append(fileNames, fmt.Sprintf("templates/src/%s.ts.gtpl", tmpl))
 	}
 
-	funcMap := generator.FuncMap(g, g.CommonFunc, template.FuncMap{
+	funcMap := generator.FuncMap(g, template.FuncMap{
 		"FormatDeprecation":   g.formatDeprecation,
 		"HasPrefix":           strings.HasPrefix,
 		"CommentToLines":      g.commentToLines,
@@ -178,8 +228,6 @@ func (g *NodeGenerator) LoadTemplates() (*template.Template, error) {
 
 // Generate will generate the NodeJS SDK code and might modify the schema to reorder types in a alphanumeric fashion.
 func (g *NodeGenerator) Generate(_ context.Context, schema *introspection.Schema) ([]byte, error) {
-	g.CommonFunc = generator.NewCommonFunctions(&templates.FormatTypeFunc{})
-
 	sort.SliceStable(schema.Types, func(i, j int) bool {
 		return schema.Types[i].Name < schema.Types[j].Name
 	})

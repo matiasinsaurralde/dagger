@@ -43,7 +43,7 @@ type GoGenerator struct {
 }
 
 func (g *GoGenerator) LoadTemplates() (*template.Template, error) {
-	funcMap := generator.FuncMap(g, g.CommonFunc, template.FuncMap{
+	funcMap := generator.FuncMap(g, template.FuncMap{
 		"FieldOptionsStructName":  g.fieldOptionsStructName,
 		"FieldFunction":           g.fieldFunction,
 		"IsListOfObject":          g.isListOfObject,
@@ -53,6 +53,8 @@ func (g *GoGenerator) LoadTemplates() (*template.Template, error) {
 		"FormatArrayField":        g.formatArrayField,
 		"FormatArrayToSingleType": g.formatArrayToSingleType,
 		"FormatDeprecation":       g.FormatDeprecation,
+		"FormatReturnType":        g.FormatReturnType,
+		"FormatInputType":         g.FormatInputType,
 		"comment":                 g.Comment,
 	})
 
@@ -227,6 +229,56 @@ func (g *GoGenerator) FormatKindList(representation string) string {
 	return representation
 }
 
+func (g *GoGenerator) FormatKindScalarString(representation string) string {
+	representation += "string"
+	return representation
+}
+
+func (g *GoGenerator) FormatKindScalarInt(representation string) string {
+	representation += "int"
+	return representation
+}
+
+func (g *GoGenerator) FormatKindScalarFloat(representation string) string {
+	representation += "float"
+	return representation
+}
+
+func (g *GoGenerator) FormatKindScalarBoolean(representation string) string {
+	representation += "bool"
+	return representation
+}
+
+func (g *GoGenerator) FormatKindScalarDefault(representation string, refName string, input bool) string {
+	if alias, ok := generator.CustomScalar[refName]; ok && input {
+		representation += "*" + alias
+	} else {
+		representation += refName
+	}
+
+	return representation
+}
+
+func (g *GoGenerator) FormatKindObject(representation string, refName string) string {
+	name := refName
+	if name == generator.QueryStructName {
+		name = generator.QueryStructClientName
+	}
+
+	representation += g.FormatName(name)
+	return representation
+}
+
+func (g *GoGenerator) FormatKindInputObject(representation string, refName string) string {
+	representation += g.FormatName(refName)
+	return representation
+}
+
+func (g *GoGenerator) FormatKindEnum(representation string, refName string) string {
+	representation += refName
+	return representation
+}
+
 // Comment comments out a string
 // Example: `hello\nworld` -> `// hello\n// world\n`
 func (g *GoGenerator) Comment(s string) string {
@@ -278,9 +330,9 @@ func (g *GoGenerator) fieldFunction(f introspection.Field) string {
 		// FIXME: For top-level queries (e.g. File, Directory) if the field is named `id` then keep it as a
 		// scalar (DirectoryID) rather than an object (*Directory).
 		if f.ParentObject.Name == generator.QueryStructName && arg.Name == "id" {
-			args = append(args, fmt.Sprintf("%s %s", arg.Name, g.CommonFunc.FormatOutputType(arg.TypeRef)))
+			args = append(args, fmt.Sprintf("%s %s", arg.Name, g.FormatOutputType(arg.TypeRef)))
 		} else {
-			args = append(args, fmt.Sprintf("%s %s", arg.Name, g.CommonFunc.FormatInputType(arg.TypeRef)))
+			args = append(args, fmt.Sprintf("%s %s", arg.Name, g.FormatInputType(arg.TypeRef)))
 		}
 	}
 	// Options (e.g. DirectoryContentsOptions -> <Object><Field>Options)
@@ -292,7 +344,7 @@ func (g *GoGenerator) fieldFunction(f introspection.Field) string {
 	}
 	signature += "(" + strings.Join(args, ", ") + ")"
 
-	retType := g.CommonFunc.FormatReturnType(f)
+	retType := g.FormatReturnType(f)
 	if f.TypeRef.IsScalar() || f.TypeRef.IsList() {
 		retType = fmt.Sprintf("(%s, error)", retType)
 	} else {
@@ -360,10 +412,29 @@ func (g *GoGenerator) formatArrayField(fields []*introspection.Field) string {
 	return strings.Join(result, ", ")
 }
 
+// FormatReturnType formats a GraphQL type into the SDK language output,
+// unless it's an ID that will be converted which needs to be formatted
+// as an input (for chaining).
+func (g *GoGenerator) FormatReturnType(f introspection.Field) string {
+	return generator.FormatType(g, f.TypeRef, g.ConvertID(f))
+}
+
+// FormatInputType formats a GraphQL type into the SDK language input
+//
+// Example: `String` -> `string`
+func (g *GoGenerator) FormatInputType(r *introspection.TypeRef) string {
+	return generator.FormatType(g, r, true)
+}
+
+// FormatOutputType formats a GraphQL type into the SDK language output
+//
+// Example: `String` -> `string`
+func (g *GoGenerator) FormatOutputType(r *introspection.TypeRef) string {
+	return generator.FormatType(g, r, false)
+}
+
 func (g *GoGenerator) Generate(_ context.Context, schema *introspection.Schema) ([]byte, error) {
 	generator.SetSchema(schema)
-
-	// g.CommonFunc = generator.NewCommonFunctions(&templates.FormatTypeFunc{})
 
 	if _, err := g.LoadTemplates(); err != nil {
 		return nil, err

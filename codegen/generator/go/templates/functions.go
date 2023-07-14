@@ -15,7 +15,7 @@ import (
 
 var (
 	commonFunc = generator.NewCommonFunctions(&FormatTypeFunc{})
-	FuncMap    = template.FuncMap{
+	funcMap    = template.FuncMap{
 		"Comment":                 comment,
 		"FormatDeprecation":       formatDeprecation,
 		"FormatReturnType":        commonFunc.FormatReturnType,
