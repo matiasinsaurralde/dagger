@@ -89,6 +89,9 @@ func (g *GoGenerator) LoadTemplates() (*template.Template, error) {
 // FormatName formats a GraphQL name (e.g. object, field, arg) into a Go equivalent
 // Example: `fooId` -> `FooID`
 func (g *GoGenerator) FormatName(s string) string {
+	if s == generator.QueryStructName {
+		return generator.QueryStructClientName
+	}
 	if len(s) > 0 {
 		s = strings.ToUpper(string(s[0])) + s[1:]
 	}
@@ -311,9 +314,6 @@ func (g *GoGenerator) fieldOptionsStructName(f introspection.Field) string {
 // Example: `contents: String!` -> `func (r *File) Contents(ctx context.Context) (string, error)`
 func (g *GoGenerator) fieldFunction(f introspection.Field) string {
 	structName := g.FormatName(f.ParentObject.Name)
-	if structName == generator.QueryStructName {
-		structName = "Client"
-	}
 	signature := fmt.Sprintf(`func (r *%s) %s`,
 		structName, g.FormatName(f.Name))
 
