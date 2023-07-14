@@ -79,6 +79,8 @@ type Generator interface {
 	FormatOutputType(*introspection.TypeRef) string
 
 	ConvertID(introspection.Field) bool
+
+	IsSelfChainable(introspection.Type) bool
 }
 
 // BaseGenerator provides default implementations for common methods
@@ -110,6 +112,7 @@ func FuncMap(g Generator, generatorFunc template.FuncMap) template.FuncMap {
 		"FormatInputType":   g.FormatInputType,
 		"FormatOutputType":  g.FormatOutputType,
 		"ConvertID":         g.ConvertID,
+		"IsSelfChainable":   g.IsSelfChainable,
 	}
 
 	// Append generator-specific functions:
@@ -225,6 +228,20 @@ func (b *BaseGenerator) ConvertID(f introspection.Field) bool {
 	// ID represents the exact same object but if that changes, we'll
 	// need to adjust.
 	return ok && alias == f.ParentObject.Name
+}
+
+// IsSelfChainable returns true if an object type has any fields that return that same type.
+func (b *BaseGenerator) IsSelfChainable(t introspection.Type) bool {
+	for _, f := range t.Fields {
+		// Only consider fields that return a non-null object.
+		if !f.TypeRef.IsObject() || f.TypeRef.Kind != introspection.TypeKindNonNull {
+			continue
+		}
+		if f.TypeRef.OfType.Name == t.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // SetSchemaParents sets all the parents for the fields.
